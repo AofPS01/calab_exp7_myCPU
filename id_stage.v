@@ -1,43 +1,28 @@
-module mycpu_top(
+module idstage (
     input  wire        clk,
-    input  wire        resetn,
-    // inst sram interface
-    output wire        inst_sram_en,
-    output wire [ 3:0] inst_sram_we,
-    output wire [31:0] inst_sram_addr,
-    output wire [31:0] inst_sram_wdata,
-    input  wire [31:0] inst_sram_rdata,
-    // data sram interface
-    output wire        data_sram_en,
-    output wire [ 3:0] data_sram_we,
-    output wire [31:0] data_sram_addr,
-    output wire [31:0] data_sram_wdata,
-    input  wire [31:0] data_sram_rdata,
-    // trace debug interface
-    output wire [31:0] debug_wb_pc,
-    output wire [ 3:0] debug_wb_rf_we,
-    output wire [ 4:0] debug_wb_rf_wnum,
-    output wire [31:0] debug_wb_rf_wdata
+    input  wire        rst,
+    // pipeline control signal, after '_' is the property of the front
+    input  wire        if_validout,
+    input  wire        ex_allowin,
+    output wire        id_allowin,  // means data can in, signal is foreahead
+    output wire        id_validout,
+    // pipeline data signals in, with inst and pc, and reg flie signals
+    input  wire [63:0] if_to_id_bus,
+    input  wire [37:0] wb_regfile_bus,  // maybe it needn't store
+    // pipeline data signals out, with branch taken and addr, and to execute stage
+    output wire [32:0] br_bus,
+    output wire [150:0] id_to_ex_bus
 );
-reg         reset;
-always @(posedge clk) reset <= ~resetn;
 
-reg         valid;
-always @(posedge clk) begin
-    if (reset) begin
-        valid <= 1'b0;
-    end
-    else begin
-        valid <= 1'b1;
-    end
-end
+// stage id, double hands
+reg         valid;      // means data is valid, [IMPORTANT!]
+wire        readygo;    // means task has done
 
-wire [31:0] seq_pc;
-wire [31:0] nextpc;
+wire [31:0] pc;
+wire [31:0] inst;
 wire        br_taken;
 wire [31:0] br_target;
-wire [31:0] inst;
-reg  [31:0] pc;
+reg  [63:0] if_to_id_bus_r;
 
 wire [11:0] alu_op;
 wire        load_op;
@@ -74,11 +59,11 @@ wire [31:0] op_19_15_d;
 
 wire        inst_add_w;
 wire        inst_sub_w;
-wire        inst_slt;
+wire        inst_slt ;
 wire        inst_sltu;
 wire        inst_nor;
 wire        inst_and;
-wire        inst_or;
+wire        inst_or ;
 wire        inst_xor;
 wire        inst_slli_w;
 wire        inst_srli_w;
@@ -87,8 +72,8 @@ wire        inst_addi_w;
 wire        inst_ld_w;
 wire        inst_st_w;
 wire        inst_jirl;
-wire        inst_b;
-wire        inst_bl;
+wire        inst_b  ;
+wire        inst_bl ;
 wire        inst_beq;
 wire        inst_bne;
 wire        inst_lu12i_w;
@@ -108,30 +93,11 @@ wire        rf_we   ;
 wire [ 4:0] rf_waddr;
 wire [31:0] rf_wdata;
 
-wire [31:0] alu_src1   ;
-wire [31:0] alu_src2   ;
-wire [31:0] alu_result ;
-
-wire [31:0] mem_result;
-
-wire [31:0] final_result;
-
-assign seq_pc       = pc + 3'h4;
-assign nextpc       = br_taken ? br_target : seq_pc;
-
-always @(posedge clk) begin
-    if (reset) begin
-        pc <= 32'h1bfffffc;     //trick: to make nextpc be 0x1c000000 during reset, reason is loongarch's feature
-    end
-    else begin
-        pc <= nextpc;
-    end
-end
-
-assign inst_sram_we    = 1'b0;
-assign inst_sram_addr  = pc;
-assign inst_sram_wdata = 32'b0;
-assign inst            = inst_sram_rdata;
+assign {pc, inst} = if_to_id_bus_r;
+assign br_bus     = {br_taken, br_target};
+assign {rf_we,
+        rf_waddr,
+        rf_wdata} = wb_regfile_bus;
 
 assign op_31_26  = inst[31:26];
 assign op_25_22  = inst[25:22];
@@ -147,10 +113,10 @@ assign i20  = inst[24: 5];
 assign i16  = inst[25:10];
 assign i26  = {inst[ 9: 0], inst[25:10]};
 
-decoder_6_64 u_dec0(.in(op_31_26 ), .out(op_31_26_d ));
-decoder_4_16 u_dec1(.in(op_25_22 ), .out(op_25_22_d ));
-decoder_2_4  u_dec2(.in(op_21_20 ), .out(op_21_20_d ));
-decoder_5_32 u_dec3(.in(op_19_15 ), .out(op_19_15_d ));
+decoder_6_64 u_dec0(.in(op_31_26), .out(op_31_26_d));
+decoder_4_16 u_dec1(.in(op_25_22), .out(op_25_22_d));
+decoder_2_4  u_dec2(.in(op_21_20), .out(op_21_20_d));
+decoder_5_32 u_dec3(.in(op_19_15), .out(op_19_15_d));
 
 assign inst_add_w  = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h00];
 assign inst_sub_w  = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h02];
@@ -187,19 +153,19 @@ assign alu_op[ 9] = inst_srli_w;
 assign alu_op[10] = inst_srai_w;
 assign alu_op[11] = inst_lu12i_w;
 
-assign need_ui5   =  inst_slli_w | inst_srli_w | inst_srai_w;
-assign need_si12  =  inst_addi_w | inst_ld_w | inst_st_w;
-assign need_si16  =  inst_jirl | inst_beq | inst_bne;
-assign need_si20  =  inst_lu12i_w;
-assign need_si26  =  inst_b | inst_bl;
-assign src2_is_4  =  inst_jirl | inst_bl;
+assign need_ui5   = inst_slli_w | inst_srli_w | inst_srai_w;
+assign need_si12  = inst_addi_w | inst_ld_w | inst_st_w;
+assign need_si16  = inst_jirl | inst_beq | inst_bne;
+assign need_si20  = inst_lu12i_w;
+assign need_si26  = inst_b | inst_bl;
+assign src2_is_4  = inst_jirl | inst_bl;
 
-assign imm = src2_is_4 ? 32'h4                      :
-             need_si20 ? {i20[19:0], 12'b0}         :
-/*need_ui5 || need_si12*/{{20{i12[11]}}, i12[11:0]} ;
+assign imm = src2_is_4 ? 32'h4                     :
+             need_si20 ? {i20[19:0], 12'b0}        :
+/*need_ui5 || need_si12*/{{20{i12[11]}}, i12[11:0]};
 
-assign br_offs = need_si26 ? {{ 4{i26[25]}}, i26[25:0], 2'b0} :
-                             {{14{i16[15]}}, i16[15:0], 2'b0} ;
+assign br_offs = need_si26 ? {{ 4{i26[25]}}, i26[25:0], 2'b0}:
+                             {{14{i16[15]}}, i16[15:0], 2'b0};
 
 assign jirl_offs = {{14{i16[15]}}, i16[15:0], 2'b0};
 
@@ -224,7 +190,7 @@ assign mem_we        = inst_st_w;
 assign dest          = dst_is_r1 ? 5'd1 : rd;
 
 assign rf_raddr1 = rj;
-assign rf_raddr2 = src_reg_is_rd ? rd :rk;
+assign rf_raddr2 = src_reg_is_rd ? rd : rk;
 regfile u_regfile(
     .clk    (clk      ),
     .raddr1 (rf_raddr1),
@@ -249,31 +215,39 @@ assign br_taken = (   inst_beq  &&  rj_eq_rd
 assign br_target = (inst_beq || inst_bne || inst_bl || inst_b) ? (pc + br_offs) :
                                                    /*inst_jirl*/ (rj_value + jirl_offs);
 
-assign alu_src1 = src1_is_pc  ? pc[31:0] : rj_value;
-assign alu_src2 = src2_is_imm ? imm : rkd_value;
+assign id_to_ex_bus = {alu_op       ,    // 12
+                       load_op      ,    // 1
+                       src1_is_pc   ,    // 1
+                       src2_is_imm  ,    // 1
+                       gr_we        ,    // 1
+                       mem_we       ,    // 1
+                       dest         ,    // 5
+                       imm          ,    // 32
+                       rj_value     ,    // 32
+                       rkd_value    ,    // 32
+                       pc           ,    // 32
+                       res_from_mem};    /// totally is 151
 
-alu u_alu(
-    .alu_op     (alu_op    ),
-    .alu_src1   (alu_src1  ),
-    .alu_src2   (alu_src2  ),
-    .alu_result (alu_result)
-    );
+assign readygo      = 1'b1;  // for that there's no adventure and wizard, we can send data at anytime
+assign id_allowin   = ~valid | (readygo & ex_allowin);
+assign id_validout  = valid & readygo; // data is valid and can send to next stage
 
-assign data_sram_we    = mem_we && valid;
-assign data_sram_addr  = alu_result;
-assign data_sram_wdata = rkd_value;
-
-assign mem_result   = data_sram_rdata;
-assign final_result = res_from_mem ? mem_result : alu_result;
-
-assign rf_we    = gr_we && valid;
-assign rf_waddr = dest;
-assign rf_wdata = final_result;
-
-// debug info generate
-assign debug_wb_pc       = pc;
-assign debug_wb_rf_we    = {4{rf_we}};
-assign debug_wb_rf_wnum  = dest;
-assign debug_wb_rf_wdata = final_result;
+// data & its valid
+always @(posedge clk) begin
+    if (rst) begin
+        valid <= 1'b0;
+    end
+    else if (id_allowin) begin
+        valid <= if_validout;
+    end
+end
+always @(posedge clk) begin
+    if (rst) begin
+        if_to_id_bus_r <= 64'b0;
+    end
+    else if (if_validout & id_allowin) begin
+        if_to_id_bus_r <= if_to_id_bus;
+    end
+end
 
 endmodule
