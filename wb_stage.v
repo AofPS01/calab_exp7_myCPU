@@ -40,10 +40,10 @@ assign rf_we    = gr_we & valid;
 assign rf_waddr = dest;
 assign rf_wdata = final_result;
 
-assign ws_to_rf_bus = {rf_we   ,    //37:37
-                       rf_waddr,    //36:32
-                       rf_wdata     //31:0
-                      };        /// totally 38
+assign wb_regfile_bus = {rf_we   ,    //37:37
+                         rf_waddr,    //36:32
+                         rf_wdata     //31:0
+                        };        /// totally 38
 
 // debug info generate
 assign debug_wb_pc       = pc;
