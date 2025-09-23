@@ -92,7 +92,7 @@ alu u_alu(
     );
 
 assign data_sram_en    = 1'b1;
-assign data_sram_we    = mem_we && valid;
+assign data_sram_we    = mem_we && valid ? 4'hf : 4'h0;
 assign data_sram_addr  = alu_result;
 assign data_sram_wdata = rkd_value;
 
