@@ -28,7 +28,7 @@ wire        br_taken_cancel;
 wire [31:0] br_target;
 wire [31:0] inst;
 reg  [31:0] pc;
-reg  [32:0] br_bus_r;
+reg  [33:0] br_bus_r;
 
 assign readygo      = 1'b1;  // for that there's no adventure and wizard, we can send data at anytime
 assign if_allowin   = ~valid | (readygo & id_allowin);
@@ -49,7 +49,7 @@ always @(posedge clk) begin
 end
 always @(posedge clk) begin
     if (rst) begin
-        br_bus_r <= 33'd0;
+        br_bus_r <= 34'd0;
     end
     else if (other_validout & if_allowin) begin
         br_bus_r <= br_bus;
