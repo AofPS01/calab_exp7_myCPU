@@ -65,7 +65,7 @@ always @(posedge clk) begin
     if (rst) begin
         pc <= 32'h1bfffffc;     //trick: to make nextpc be 0x1c000000 during reset, reason is loongarch's feature
     end
-    else begin
+    else if (if_allowin) begin
         pc <= nextpc;
     end
 end
