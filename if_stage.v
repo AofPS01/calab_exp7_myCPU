@@ -7,7 +7,7 @@ module ifstage (
     output wire        if_allowin,  // means data can in, signal is foreahead
     output wire        if_validout,
     // pipeline data signal in, for branch or jump, contains addr_sel and PC
-    input  wire [32:0] br_bus,
+    input  wire [33:0] br_bus,
     // pipeline data signal out, to id stage, contains pc and inst
     output wire [63:0] if_to_id_bus,
     // inst sram interface
@@ -24,6 +24,7 @@ wire        readygo;    // means task has done
 wire [31:0] seq_pc;
 wire [31:0] nextpc;
 wire        br_taken;
+wire        br_taken_cancel;
 wire [31:0] br_target;
 wire [31:0] inst;
 reg  [31:0] pc;
@@ -42,6 +43,9 @@ always @(posedge clk) begin
     else if (if_allowin) begin
         valid <= other_validout;
     end
+    else if (br_taken_cancel) begin 
+        valid <= 1'b0; // Flush Release
+    end
 end
 always @(posedge clk) begin
     if (rst) begin
@@ -52,9 +56,9 @@ always @(posedge clk) begin
     end
 end
 
-assign {br_taken, br_target} = br_bus_r;
-assign seq_pc                = pc + 3'h4;
-assign nextpc                = br_taken ? br_target : seq_pc;
+assign {br_taken, br_taken_cancel, br_target} = br_bus_r;
+assign seq_pc                                 = pc + 3'h4;
+assign nextpc                                 = br_taken ? br_target : seq_pc;
 
 always @(posedge clk) begin
     if (rst) begin

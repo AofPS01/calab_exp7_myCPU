@@ -13,7 +13,7 @@ module idstage (
     input  wire [ 4:0] ma_to_id_dest,
     input  wire [ 4:0] wb_to_id_dest,
     // pipeline data signals out, with branch taken and addr, and to execute stage
-    output wire [32:0] br_bus,
+    output wire [33:0] br_bus,
     output wire [150:0] id_to_ex_bus
 );
 
@@ -31,6 +31,7 @@ wire        raw_rd;
 wire [31:0] pc;
 wire [31:0] inst;
 wire        br_taken;
+wire        br_taken_cancel;
 wire [31:0] br_target;
 reg  [63:0] if_to_id_bus_r;
 
@@ -105,7 +106,7 @@ wire [ 4:0] rf_waddr;
 wire [31:0] rf_wdata;
 
 assign {pc, inst} = if_to_id_bus_r;
-assign br_bus     = {br_taken, br_target};
+assign br_bus     = {br_taken, br_taken_cancel, br_target};
 assign {rf_we,
         rf_waddr,
         rf_wdata} = wb_regfile_bus;
@@ -216,49 +217,53 @@ regfile u_regfile(
 assign rj_value  = rf_rdata1;
 assign rkd_value = rf_rdata2;
 
-assign rj_eq_rd  = (rj_value == rkd_value);
-assign br_taken  = (   inst_beq  &&  rj_eq_rd
-                    || inst_bne  && !rj_eq_rd
-                    || inst_jirl
-                    || inst_bl
-                    || inst_b
-                  ) && valid;
-assign br_target = (inst_beq || inst_bne || inst_bl || inst_b) ? (pc + br_offs) :
-                                                   /*inst_jirl*/ (rj_value + jirl_offs);
+assign rj_eq_rd        = (rj_value == rkd_value);
+assign br_taken        = (   inst_beq  &&  rj_eq_rd
+                          || inst_bne  && !rj_eq_rd
+                          || inst_jirl
+                          || inst_bl
+                          || inst_b
+                        ) && valid;
+assign br_taken_cancel = br_taken & valid & readygo;
+assign br_target       = (inst_beq || inst_bne || inst_bl || inst_b) ? (pc + br_offs) :
+                                                         /*inst_jirl*/ (rj_value + jirl_offs);
 
-assign read_rj   = ~(inst_b | inst_bl | inst_lu12i_w);
-assign read_rk   = ~(inst_slli_w | inst_srli_w | inst_srai_w
-                   | inst_addi_w | inst_lu12i_w | inst_ld_w | inst_st_w
-                   | inst_jirl | inst_b | inst_bl | inst_beq | inst_bne);
-assign read_rd   = inst_st_w | inst_beq | inst_bne;
+assign read_rj = ~(inst_b | inst_bl | inst_lu12i_w);
+assign read_rk = ~(inst_slli_w | inst_srli_w | inst_srai_w
+                 | inst_addi_w | inst_lu12i_w | inst_ld_w | inst_st_w
+                 | inst_jirl | inst_b | inst_bl | inst_beq | inst_bne);
+assign read_rd = inst_st_w | inst_beq | inst_bne;
 
-assign raw_rj    = read_rj && (rj != 5'h00) && ((rj == ex_to_id_dest) || (rj == ma_to_id_dest) || (rj == wb_to_id_dest));
-assign raw_rk    = read_rk && (rk != 5'h00) && ((rk == ex_to_id_dest) || (rk == ma_to_id_dest) || (rk == wb_to_id_dest));
-assign raw_rd    = read_rd && (rd != 5'h00) && ((rd == ex_to_id_dest) || (rd == ma_to_id_dest) || (rd == wb_to_id_dest));
+assign raw_rj  = read_rj && (rj != 5'h00) && ((rj == ex_to_id_dest) || (rj == ma_to_id_dest) || (rj == wb_to_id_dest));
+assign raw_rk  = read_rk && (rk != 5'h00) && ((rk == ex_to_id_dest) || (rk == ma_to_id_dest) || (rk == wb_to_id_dest));
+assign raw_rd  = read_rd && (rd != 5'h00) && ((rd == ex_to_id_dest) || (rd == ma_to_id_dest) || (rd == wb_to_id_dest));
 
-assign id_to_ex_bus = {alu_op       ,    // 12
-                       load_op      ,    // 1
-                       src1_is_pc   ,    // 1
-                       src2_is_imm  ,    // 1
-                       gr_we        ,    // 1
-                       mem_we       ,    // 1
-                       dest         ,    // 5
-                       imm          ,    // 32
-                       rj_value     ,    // 32
-                       rkd_value    ,    // 32
-                       pc           ,    // 32
-                       res_from_mem};    /// totally is 151
+assign id_to_ex_bus = {alu_op       ,   // 12
+                       load_op      ,   // 1
+                       src1_is_pc   ,   // 1
+                       src2_is_imm  ,   // 1
+                       gr_we        ,   // 1
+                       mem_we       ,   // 1
+                       dest         ,   // 5
+                       imm          ,   // 32
+                       rj_value     ,   // 32
+                       rkd_value    ,   // 32
+                       pc           ,   // 32
+                       res_from_mem};   /// totally is 151
 
-assign readygo      = ~(raw_rj | raw_rk | raw_rd);
-assign id_allowin   = ~valid | (readygo & ex_allowin);
-assign id_validout  = valid & readygo; // data is valid and can send to next stage
+assign readygo     = ~(raw_rj | raw_rk | raw_rd);
+assign id_allowin  = ~valid | (readygo & ex_allowin);
+assign id_validout = valid & readygo;   // data is valid and can send to next stage
 
 // data & its valid
 always @(posedge clk) begin
     if (rst) begin
         valid <= 1'b0;
     end
-    else if (id_allowin) begin
+    else if (br_taken_cancel) begin // if inst. in ID branches,
+        valid <= 1'b0;              // flush the inst. ready to in ID @next cycle forcely
+    end
+    else if (id_allowin) begin      // normal
         valid <= if_validout;
     end
 end

@@ -40,7 +40,7 @@ wire [150:0] id_to_ex_bus;
 wire [ 70:0] ex_to_ma_bus;
 wire [ 69:0] ma_to_wb_bus;
 wire [ 37:0] wb_regfile_bus;
-wire [ 32:0] br_bus;
+wire [ 33:0] br_bus;
 wire [  4:0] ex_to_id_dest;
 wire [  4:0] ma_to_id_dest;
 wire [  4:0] wb_to_id_dest;
