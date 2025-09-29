@@ -9,6 +9,9 @@ module idstage (
     // pipeline data signals in, with inst and pc, and reg flie signals
     input  wire [63:0] if_to_id_bus,
     input  wire [37:0] wb_regfile_bus,  // maybe it needn't store
+    input  wire [ 4:0] ex_to_id_dest,
+    input  wire [ 4:0] ma_to_id_dest,
+    input  wire [ 4:0] wb_to_id_dest,
     // pipeline data signals out, with branch taken and addr, and to execute stage
     output wire [32:0] br_bus,
     output wire [150:0] id_to_ex_bus
@@ -17,6 +20,13 @@ module idstage (
 // stage id, double hands
 reg         valid;      // means data is valid, [IMPORTANT!]
 wire        readygo;    // means task has done
+
+wire        read_rj;
+wire        read_rk;
+wire        read_rd;
+wire        raw_rj;
+wire        raw_rk;
+wire        raw_rd;
 
 wire [31:0] pc;
 wire [31:0] inst;
@@ -33,6 +43,7 @@ wire        dst_is_r1;
 wire        gr_we;
 wire        mem_we;
 wire        src_reg_is_rd;
+wire        rj_eq_rd;
 wire [ 4:0] dest;
 wire [31:0] rj_value;
 wire [31:0] rkd_value;
@@ -205,15 +216,25 @@ regfile u_regfile(
 assign rj_value  = rf_rdata1;
 assign rkd_value = rf_rdata2;
 
-assign rj_eq_rd = (rj_value == rkd_value);
-assign br_taken = (   inst_beq  &&  rj_eq_rd
-                   || inst_bne  && !rj_eq_rd
-                   || inst_jirl
-                   || inst_bl
-                   || inst_b
+assign rj_eq_rd  = (rj_value == rkd_value);
+assign br_taken  = (   inst_beq  &&  rj_eq_rd
+                    || inst_bne  && !rj_eq_rd
+                    || inst_jirl
+                    || inst_bl
+                    || inst_b
                   ) && valid;
 assign br_target = (inst_beq || inst_bne || inst_bl || inst_b) ? (pc + br_offs) :
                                                    /*inst_jirl*/ (rj_value + jirl_offs);
+
+assign read_rj   = ~(inst_b | inst_bl | inst_lu12i_w);
+assign read_rk   = ~(inst_slli_w | inst_srli_w | inst_srai_w
+                   | inst_addi_w | inst_lu12i_w | inst_ld_w | inst_st_w
+                   | inst_jirl | inst_b | inst_bl | inst_beq | inst_bne);
+assign read_rd   = inst_st_w | inst_beq | inst_bne;
+
+assign raw_rj    = read_rj && (rj != 5'h00) && ((rj == ex_to_id_dest) || (rj == ma_to_id_dest) || (rj == wb_to_id_dest));
+assign raw_rk    = read_rk && (rk != 5'h00) && ((rk == ex_to_id_dest) || (rk == ma_to_id_dest) || (rk == wb_to_id_dest));
+assign raw_rd    = read_rd && (rd != 5'h00) && ((rd == ex_to_id_dest) || (rd == ma_to_id_dest) || (rd == wb_to_id_dest));
 
 assign id_to_ex_bus = {alu_op       ,    // 12
                        load_op      ,    // 1
@@ -228,7 +249,7 @@ assign id_to_ex_bus = {alu_op       ,    // 12
                        pc           ,    // 32
                        res_from_mem};    /// totally is 151
 
-assign readygo      = 1'b1;  // for that there's no adventure and wizard, we can send data at anytime
+assign readygo      = ~(raw_rj | raw_rk | raw_rd);
 assign id_allowin   = ~valid | (readygo & ex_allowin);
 assign id_validout  = valid & readygo; // data is valid and can send to next stage
 
