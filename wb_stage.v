@@ -10,6 +10,7 @@ module wbstage (
     input  wire [69:0] ma_to_wb_bus,
     // pipeline data signal out
     output wire [37:0] wb_regfile_bus,
+    output wire [ 4:0] wb_to_id_dest,
     // trace debug interface
     output wire [31:0] debug_wb_pc,
     output wire [ 3:0] debug_wb_rf_we,
@@ -44,6 +45,7 @@ assign wb_regfile_bus = {rf_we   ,    //37:37
                          rf_waddr,    //36:32
                          rf_wdata     //31:0
                         };        /// totally 38
+assign wb_to_id_dest = dest & {5{valid}};
 
 // debug info generate
 assign debug_wb_pc       = pc;

@@ -10,6 +10,7 @@ module mastage (
     input  wire [70:0] ex_to_ma_bus,
     // pipeline data signal out
     output wire [69:0] ma_to_wb_bus,
+    output wire [ 4:0] ma_to_id_dest,
     // data sram interface
     input  wire [31:0] data_sram_rdata
 );
@@ -42,6 +43,7 @@ assign ma_to_wb_bus = {gr_we       ,    //69:69
                        final_result,    //63:32
                        pc               //31:0
                        };   /// totally 70
+assign ma_to_id_dest = dest & {5{valid}};
 
 assign readygo      = 1'b1;  // for that there's no adventure and wizard, we can send data at anytime
 assign ma_allowin   = ~valid | (readygo & wb_allowin);
