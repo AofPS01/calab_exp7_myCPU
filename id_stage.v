@@ -9,9 +9,9 @@ module idstage (
     // pipeline data signals in, with inst and pc, and reg flie signals
     input  wire [63:0] if_to_id_bus,
     input  wire [37:0] wb_regfile_bus,  // maybe it needn't store
-    input  wire [ 4:0] ex_to_id_dest,
-    input  wire [ 4:0] ma_to_id_dest,
-    input  wire [ 4:0] wb_to_id_dest,
+    input  wire [ 5:0] ex_to_id_bus,
+    input  wire [ 5:0] ma_to_id_bus,
+    input  wire [ 5:0] wb_to_id_bus,
     // pipeline data signals out, with branch taken and addr, and to execute stage
     output wire [33:0] br_bus,
     output wire [150:0] id_to_ex_bus
@@ -27,6 +27,13 @@ wire        read_rd;
 wire        raw_rj;
 wire        raw_rk;
 wire        raw_rd;
+
+wire [ 4:0] ex_to_id_dest;
+wire        ex_gr_we;
+wire [ 4:0] ma_to_id_dest;
+wire        ma_gr_we;
+wire [ 4:0] wb_to_id_dest;
+wire        wb_gr_we;
 
 wire [31:0] pc;
 wire [31:0] inst;
@@ -228,15 +235,19 @@ assign br_taken_cancel = br_taken & valid & readygo;
 assign br_target       = (inst_beq || inst_bne || inst_bl || inst_b) ? (pc + br_offs) :
                                                          /*inst_jirl*/ (rj_value + jirl_offs);
 
+assign {ex_gr_we, ex_to_id_dest} = ex_to_id_bus;
+assign {ma_gr_we, ma_to_id_dest} = ma_to_id_bus;
+assign {wb_gr_we, wb_to_id_dest} = wb_to_id_bus;
+
 assign read_rj = ~(inst_b | inst_bl | inst_lu12i_w);
 assign read_rk = ~(inst_slli_w | inst_srli_w | inst_srai_w
                  | inst_addi_w | inst_lu12i_w | inst_ld_w | inst_st_w
                  | inst_jirl | inst_b | inst_bl | inst_beq | inst_bne);
 assign read_rd = inst_st_w | inst_beq | inst_bne;
 
-assign raw_rj  = read_rj && (rj != 5'h00) && ((rj == ex_to_id_dest) || (rj == ma_to_id_dest) || (rj == wb_to_id_dest));
-assign raw_rk  = read_rk && (rk != 5'h00) && ((rk == ex_to_id_dest) || (rk == ma_to_id_dest) || (rk == wb_to_id_dest));
-assign raw_rd  = read_rd && (rd != 5'h00) && ((rd == ex_to_id_dest) || (rd == ma_to_id_dest) || (rd == wb_to_id_dest));
+assign raw_rj  = read_rj && (rj != 5'h00) && ((rj == ex_to_id_dest && ex_gr_we) || (rj == ma_to_id_dest && ma_gr_we) || (rj == wb_to_id_dest && wb_gr_we));
+assign raw_rk  = read_rk && (rk != 5'h00) && ((rk == ex_to_id_dest && ex_gr_we) || (rk == ma_to_id_dest && ma_gr_we) || (rk == wb_to_id_dest && wb_gr_we));
+assign raw_rd  = read_rd && (rd != 5'h00) && ((rd == ex_to_id_dest && ex_gr_we) || (rd == ma_to_id_dest && ma_gr_we) || (rd == wb_to_id_dest && wb_gr_we));
 
 assign id_to_ex_bus = {alu_op       ,   // 12
                        load_op      ,   // 1

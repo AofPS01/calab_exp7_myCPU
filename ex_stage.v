@@ -10,7 +10,7 @@ module exstage (
     input  wire [150:0] id_to_ex_bus,
     // pipeline data signal out
     output wire [70:0] ex_to_ma_bus,
-    output wire [ 4:0] ex_to_id_dest,
+    output wire [ 5:0] ex_to_id_bus,
     // data sram interface
     output wire        data_sram_en,
     output wire [ 3:0] data_sram_we,
@@ -22,7 +22,8 @@ module exstage (
 reg          valid;      // means data is valid, [IMPORTANT!]
 wire         readygo;    // means task has done
 reg  [150:0] id_to_ex_bus_r;
-wire         ex_to_id_is_load;
+wire [  4:0] ex_to_id_dest;
+wire         ex_gr_we;
 
 wire [31:0] pc;
 wire [11:0] alu_op;
@@ -61,6 +62,8 @@ assign ex_to_ma_bus = {res_from_mem,    //70:70 1
                        pc               //31:0  32
                       };                /// totally is 71
 assign ex_to_id_dest = dest & {5{valid}};
+assign ex_gr_we      = gr_we & valid;
+assign ex_to_id_bus  = {ex_gr_we, ex_to_id_dest};
 
 assign readygo      = 1'b1;  // for that there's no adventure and wizard, we can send data at anytime
 assign ex_allowin   = ~valid | (readygo & ma_allowin);

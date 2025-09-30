@@ -41,9 +41,9 @@ wire [ 70:0] ex_to_ma_bus;
 wire [ 69:0] ma_to_wb_bus;
 wire [ 37:0] wb_regfile_bus;
 wire [ 33:0] br_bus;
-wire [  4:0] ex_to_id_dest;
-wire [  4:0] ma_to_id_dest;
-wire [  4:0] wb_to_id_dest;
+wire [  5:0] ex_to_id_bus;
+wire [  5:0] ma_to_id_bus;
+wire [  5:0] wb_to_id_bus;
 
 assign other_allowin  = 1'b1;
 assign other_validout = 1'b1;
@@ -72,9 +72,9 @@ idstage id_stage(
     .id_validout    (id_validout    ),
     .if_to_id_bus   (if_to_id_bus   ),
     .wb_regfile_bus (wb_regfile_bus ),
-    .ex_to_id_dest  (ex_to_id_dest  ),
-    .ma_to_id_dest  (ma_to_id_dest  ),
-    .wb_to_id_dest  (wb_to_id_dest  ),
+    .ex_to_id_bus  (ex_to_id_bus  ),
+    .ma_to_id_bus  (ma_to_id_bus  ),
+    .wb_to_id_bus  (wb_to_id_bus  ),
     .br_bus         (br_bus         ),
     .id_to_ex_bus   (id_to_ex_bus   )
 );
@@ -87,7 +87,7 @@ exstage ex_stage(
     .ex_validout    (ex_validout    ),
     .id_to_ex_bus   (id_to_ex_bus   ),
     .ex_to_ma_bus   (ex_to_ma_bus   ),
-    .ex_to_id_dest  (ex_to_id_dest  ),
+    .ex_to_id_bus  (ex_to_id_bus  ),
     .data_sram_en   (data_sram_en   ),
     .data_sram_we   (data_sram_we   ),
     .data_sram_addr (data_sram_addr ),
@@ -102,7 +102,7 @@ mastage ma_stage(
     .ma_validout    (ma_validout    ),
     .ex_to_ma_bus   (ex_to_ma_bus   ),
     .ma_to_wb_bus   (ma_to_wb_bus   ),
-    .ma_to_id_dest  (ma_to_id_dest  ),
+    .ma_to_id_bus  (ma_to_id_bus  ),
     .data_sram_rdata(data_sram_rdata)
 );
 wbstage wb_stage(
@@ -114,7 +114,7 @@ wbstage wb_stage(
     .wb_validout    (wb_validout    ),
     .ma_to_wb_bus   (ma_to_wb_bus   ),
     .wb_regfile_bus (wb_regfile_bus ),
-    .wb_to_id_dest  (wb_to_id_dest  ),
+    .wb_to_id_bus  (wb_to_id_bus  ),
     .debug_wb_pc       (debug_wb_pc       ),
     .debug_wb_rf_we    (debug_wb_rf_we    ),
     .debug_wb_rf_wnum  (debug_wb_rf_wnum  ),
